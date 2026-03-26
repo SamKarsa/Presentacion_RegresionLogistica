@@ -1,0 +1,2 @@
+# Presentacion_RegresionLogistica
+Presentacion para Programacion Lineal
