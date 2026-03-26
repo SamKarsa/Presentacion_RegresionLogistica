@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regresión Logística — Programación Avanzada</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --c1: #FF3CAC;
+    --c2: #784BA0;
+    --c3: #2B86C5;
+    --c4: #00F5D4;
+    --c5: #FEE440;
+    --dark: #0A0A14;
+    --dark2: #12121F;
+    --dark3: #1A1A2E;
+    --text: #F0F0FF;
+    --muted: #8888AA;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--dark);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── SLIDES ── */
+  .deck { width: 100vw; height: 100vh; position: relative; }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    padding: 60px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    transform: translateX(60px);
+    overflow: hidden;
+  }
+  .slide.active {
+    opacity: 1; pointer-events: all; transform: translateX(0);
+  }
+  .slide.exit {
+    opacity: 0; transform: translateX(-60px);
+  }
+
+  /* ── NOISE TEXTURE ── */
+  .slide::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0;
+  }
+
+  .slide > * { position: relative; z-index: 1; }
+
+  /* ── GLOW BLOBS ── */
+  .blob {
+    position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.18; pointer-events: none; z-index: 0;
+  }
+
+  /* ── NAV ── */
+  .nav {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 16px; z-index: 100;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(16px);
+    padding: 10px 20px; border-radius: 999px;
+  }
+  .nav button {
+    background: none; border: none; color: var(--text); font-size: 18px;
+    cursor: pointer; padding: 4px 10px; border-radius: 8px;
+    transition: background 0.2s;
+  }
+  .nav button:hover { background: rgba(255,255,255,0.1); }
+  .nav .dots { display: flex; gap: 6px; }
+  .nav .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted); transition: all 0.3s; cursor: pointer;
+  }
+  .nav .dot.active { background: var(--c4); width: 20px; border-radius: 4px; }
+  #slide-counter { font-size: 12px; color: var(--muted); font-family: 'Space Mono', monospace; min-width: 48px; text-align: center; }
+
+  /* ── KEYBOARD HINT ── */
+  .kb-hint {
+    position: fixed; top: 20px; right: 24px; z-index: 100;
+    font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace;
+    display: flex; gap: 8px;
+  }
+  .kb { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); padding: 2px 7px; border-radius: 4px; }
+
+  /* ── PROGRESS BAR ── */
+  .progress {
+    position: fixed; top: 0; left: 0; height: 3px; z-index: 100;
+    background: linear-gradient(90deg, var(--c1), var(--c3), var(--c4));
+    transition: width 0.4s ease; border-radius: 0 2px 2px 0;
+  }
+
+  /* ── TYPOGRAPHY ── */
+  .tag {
+    font-family: 'Space Mono', monospace; font-size: 12px; letter-spacing: 3px;
+    text-transform: uppercase; padding: 5px 14px; border-radius: 999px;
+    border: 1px solid; margin-bottom: 24px; display: inline-block;
+  }
+  .tag.pink  { color: var(--c1); border-color: var(--c1); background: rgba(255,60,172,0.1); }
+  .tag.teal  { color: var(--c4); border-color: var(--c4); background: rgba(0,245,212,0.1); }
+  .tag.blue  { color: var(--c3); border-color: var(--c3); background: rgba(43,134,197,0.1); }
+  .tag.yellow{ color: var(--c5); border-color: var(--c5); background: rgba(254,228,64,0.1); }
+
+  h1.hero {
+    font-size: clamp(52px, 8vw, 96px); font-weight: 900; line-height: 1;
+    text-align: center; letter-spacing: -2px;
+  }
+  .grad-text {
+    background: linear-gradient(135deg, var(--c1), var(--c3), var(--c4));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  h2.section-title {
+    font-size: clamp(32px, 5vw, 56px); font-weight: 800; letter-spacing: -1px;
+    margin-bottom: 12px; line-height: 1.1;
+  }
+  .subtitle { font-size: 18px; color: var(--muted); font-weight: 300; margin-bottom: 40px; }
+
+  /* ── CARDS ── */
+  .card-grid { display: grid; gap: 16px; width: 100%; max-width: 1100px; }
+  .card-grid.cols2 { grid-template-columns: 1fr 1fr; }
+  .card-grid.cols3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  .card {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; padding: 24px; position: relative; overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.18); }
+  .card .card-icon { font-size: 32px; margin-bottom: 12px; }
+  .card h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .card p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+  .card.accent-pink  { border-color: rgba(255,60,172,0.3); }
+  .card.accent-teal  { border-color: rgba(0,245,212,0.3); }
+  .card.accent-blue  { border-color: rgba(43,134,197,0.3); }
+  .card.accent-yellow{ border-color: rgba(254,228,64,0.3); }
+  .card .card-accent { position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 16px 16px 0 0; }
+  .card.accent-pink  .card-accent { background: var(--c1); }
+  .card.accent-teal  .card-accent { background: var(--c4); }
+  .card.accent-blue  .card-accent { background: var(--c3); }
+  .card.accent-yellow .card-accent { background: var(--c5); }
+
+  /* ── CODE BLOCK ── */
+  .code-block {
+    background: #0D0D1A; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px; padding: 20px 24px; font-family: 'Space Mono', monospace;
+    font-size: 12.5px; line-height: 1.8; color: #CDD6F4; width: 100%; max-width: 900px;
+    overflow-x: auto; position: relative;
+  }
+  .code-block .code-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
+    padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .code-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .code-dot.r { background: #FF5F57; } .code-dot.y { background: #FFBD2E; } .code-dot.g { background: #28CA41; }
+  .code-block .file-name { font-size: 11px; color: var(--muted); margin-left: auto; }
+  .kw { color: #CBA6F7; } /* keywords */
+  .fn { color: #89B4FA; } /* functions */
+  .st { color: #A6E3A1; } /* strings */
+  .cm { color: #585B70; } /* comments */
+  .nu { color: #FAB387; } /* numbers */
+  .cl { color: #F38BA8; } /* class names */
+
+  /* ── TABLE ── */
+  .styled-table {
+    width: 100%; border-collapse: collapse; font-size: 14px; max-width: 1000px;
+  }
+  .styled-table th {
+    padding: 12px 16px; text-align: left; font-weight: 700; font-size: 12px;
+    letter-spacing: 1px; text-transform: uppercase; background: rgba(255,255,255,0.05);
+    border-bottom: 2px solid var(--c3);
+  }
+  .styled-table td {
+    padding: 11px 16px; border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 13px; color: #CCC;
+  }
+  .styled-table tr:hover td { background: rgba(255,255,255,0.03); }
+  .styled-table .mono { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--c4); }
+
+  /* ── FORMULA BOX ── */
+  .formula {
+    background: linear-gradient(135deg, rgba(255,60,172,0.08), rgba(43,134,197,0.08));
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 16px;
+    padding: 28px 40px; text-align: center; margin: 20px 0;
+  }
+  .formula .eq {
+    font-family: 'Space Mono', monospace; font-size: clamp(18px, 2.5vw, 28px);
+    color: var(--c4); font-weight: 700; letter-spacing: 1px;
+  }
+  .formula .label { font-size: 13px; color: var(--muted); margin-top: 8px; }
+
+  /* ── MATRIX DE CONFUSION ── */
+  .conf-matrix { display: grid; grid-template-columns: auto 1fr 1fr; gap: 4px; }
+  .cm-cell {
+    padding: 14px 10px; border-radius: 8px; text-align: center;
+    font-size: 13px; font-weight: 600; min-width: 120px;
+  }
+  .cm-header { background: rgba(255,255,255,0.06); color: var(--muted); font-size: 12px; }
+  .cm-tp { background: rgba(0,245,212,0.15); border: 1px solid rgba(0,245,212,0.3); color: var(--c4); }
+  .cm-tn { background: rgba(0,245,212,0.15); border: 1px solid rgba(0,245,212,0.3); color: var(--c4); }
+  .cm-fp { background: rgba(255,60,172,0.12); border: 1px solid rgba(255,60,172,0.3); color: var(--c1); }
+  .cm-fn { background: rgba(255,60,172,0.12); border: 1px solid rgba(255,60,172,0.3); color: var(--c1); }
+
+  /* ── MEMBER BADGE ── */
+  .member-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 999px; padding: 6px 16px 6px 6px; margin-bottom: 20px;
+  }
+  .member-avatar {
+    width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-weight: 700; font-size: 14px;
+  }
+  .member-badge .name { font-size: 14px; font-weight: 600; }
+  .member-badge .role { font-size: 11px; color: var(--muted); }
+
+  /* ── ROC VIZ ── */
+  .roc-visual { display: flex; gap: 24px; align-items: center; width: 100%; max-width: 900px; }
+  .roc-svg { flex-shrink: 0; }
+  .roc-legend { flex: 1; }
+  .roc-item { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .roc-line { width: 30px; height: 3px; border-radius: 2px; }
+
+  /* ── PROS/CONS ── */
+  .pc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; max-width: 1000px; }
+  .pc-list li {
+    list-style: none; padding: 10px 14px; border-radius: 8px; margin-bottom: 8px;
+    font-size: 14px; display: flex; align-items: flex-start; gap: 10px;
+  }
+  .pc-list.pros li { background: rgba(0,245,212,0.07); border-left: 3px solid var(--c4); }
+  .pc-list.cons li { background: rgba(255,60,172,0.07); border-left: 3px solid var(--c1); }
+
+  /* ── SLIDE-SPECIFIC BACKGROUNDS ── */
+  .slide-cover { background: var(--dark); }
+  .slide-cover .hero-gradient {
+    position: absolute; inset: 0; z-index: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% 110%, rgba(120,75,160,0.4), transparent),
+                radial-gradient(ellipse 60% 40% at 90% 10%, rgba(43,134,197,0.25), transparent),
+                radial-gradient(ellipse 50% 50% at 10% 90%, rgba(255,60,172,0.2), transparent);
+  }
+  .slide-dark { background: var(--dark2); }
+  .slide-darker { background: var(--dark3); }
+
+  /* Animations */
+  @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+  @keyframes pulse-glow { 0%,100%{opacity:0.18} 50%{opacity:0.28} }
+  .float { animation: float 6s ease-in-out infinite; }
+  .pulse-glow { animation: pulse-glow 4s ease-in-out infinite; }
+
+  /* Stagger children */
+  .stagger > * { opacity: 0; transform: translateY(20px); transition: opacity 0.4s ease, transform 0.4s ease; }
+  .slide.active .stagger > *:nth-child(1) { opacity:1;transform:none;transition-delay:0.1s }
+  .slide.active .stagger > *:nth-child(2) { opacity:1;transform:none;transition-delay:0.2s }
+  .slide.active .stagger > *:nth-child(3) { opacity:1;transform:none;transition-delay:0.3s }
+  .slide.active .stagger > *:nth-child(4) { opacity:1;transform:none;transition-delay:0.4s }
+  .slide.active .stagger > *:nth-child(5) { opacity:1;transform:none;transition-delay:0.5s }
+  .slide.active .stagger > *:nth-child(6) { opacity:1;transform:none;transition-delay:0.6s }
+  .slide.active .stagger > *:nth-child(7) { opacity:1;transform:none;transition-delay:0.7s }
+
+  /* Wide layout */
+  .slide-content { width: 100%; max-width: 1100px; display:flex; flex-direction:column; align-items:flex-start; }
+  .slide-content.centered { align-items:center; text-align:center; }
+
+  /* Two col */
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:40px; width:100%; max-width:1100px; align-items:start; }
+
+  /* Chip */
+  .chip { display:inline-block; font-size:12px; padding:3px 10px; border-radius:999px; font-family:'Space Mono',monospace; }
+  .chip.green { background:rgba(0,245,212,0.15); color:var(--c4); }
+  .chip.red   { background:rgba(255,60,172,0.15); color:var(--c1); }
+  .chip.blue  { background:rgba(43,134,197,0.15); color:var(--c3); }
+
+  /* Metric card */
+  .metric-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; width:100%; max-width:1100px; }
+  .metric-card {
+    background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);
+    border-radius:14px; padding:20px; text-align:center;
+  }
+  .metric-card .val { font-size:36px; font-weight:900; line-height:1; margin-bottom:4px; }
+  .metric-card .metric-label { font-size:12px; color:var(--muted); font-weight:600; letter-spacing:1px; }
+  .metric-card .metric-formula { font-family:'Space Mono',monospace; font-size:11px; color:#666; margin-top:8px; }
+  .metric-card .metric-when { font-size:12px; color:var(--muted); margin-top:6px; line-height:1.4; }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+<div class="kb-hint">
+  <span class="kb">←</span><span class="kb">→</span>
+  <span style="margin-left:4px">navegar</span>
+</div>
+
+<div class="deck" id="deck">
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 1 — PORTADA
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide slide-cover active" id="s0">
+    <div class="hero-gradient"></div>
+    <div class="blob pulse-glow" style="width:600px;height:600px;background:var(--c2);top:-200px;right:-150px;"></div>
+    <div class="blob pulse-glow" style="width:400px;height:400px;background:var(--c3);bottom:-100px;left:-100px;animation-delay:2s"></div>
+
+    <div class="slide-content centered stagger">
+      <span class="tag teal">Programación Avanzada · Machine Learning</span>
+      <h1 class="hero">Regresión<br><span class="grad-text">Logística</span></h1>
+      <p class="subtitle" style="font-size:20px;margin-top:16px;max-width:600px">Clasificación binaria con aprendizaje supervisado — del concepto a la implementación real</p>
+      <div style="display:flex;gap:12px;margin-top:32px;flex-wrap:wrap;justify-content:center;">
+        <div class="member-badge">
+          <div class="member-avatar" style="background:linear-gradient(135deg,var(--c1),var(--c2))">I1</div>
+          <div><div class="name">Daniel Montoya Molina</div><div class="role">Introducción y Concepto</div></div>
+        </div>
+        <div class="member-badge">
+          <div class="member-avatar" style="background:linear-gradient(135deg,var(--c2),var(--c3))">I2</div>
+          <div><div class="name">Samuel López Marín</div><div class="role">Matemáticas y Métricas</div></div>
+        </div>
+        <div class="member-badge">
+          <div class="member-avatar" style="background:linear-gradient(135deg,var(--c3),var(--c4))">I3</div>
+          <div><div class="name">Wendy Infante Vera</div><div class="role">Código y Caso de Uso</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 2 — INTEGRANTE 1: ¿Qué es Machine Learning?
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide slide-dark" id="s1">
+    <div class="blob" style="width:500px;height:500px;background:var(--c1);top:-200px;left:-200px;"></div>
+    <div class="slide-content stagger">
+      <div class="member-badge">
+        <div class="member-avatar" style="background:linear-gradient(135deg,var(--c1),var(--c2))">I1</div>
+        <div><div class="name">Daniel Montoya</div><div class="role">Introducción y Concepto</div></div>
+      </div>
+      <h2 class="section-title">¿Qué es<br><span style="color:var(--c1)">Machine Learning?</span></h2>
+      <p class="subtitle">Rama de la IA que permite a los computadores aprender patrones de datos sin ser programados explícitamente.</p>
+      <div class="card-grid cols3" style="max-width:1100px">
+        <div class="card accent-pink">
+          <div class="card-accent"></div>
+          <div class="card-icon">🏷️</div>
+          <h3>Supervisado</h3>
+          <p>Aprende con datos etiquetados (entrada + respuesta). Ej: Regresión Logística, SVM, Árbol de Decisión.</p>
+          <div style="margin-top:12px"><span class="chip green">← Nosotros aquí</span></div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔍</div>
+          <h3>No Supervisado</h3>
+          <p>Descubre patrones ocultos sin etiquetas. Ej: K-Means, PCA, DBSCAN.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🎮</div>
+          <h3>Por Refuerzo</h3>
+          <p>Aprende mediante recompensas y castigos. Ej: AlphaGo, videojuegos con IA.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 3 — INTEGRANTE 1: ¿Qué es Regresión Logística?
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide slide-darker" id="s2">
+    <div class="blob" style="width:450px;height:450px;background:var(--c3);top:-150px;right:-100px;"></div>
+    <div class="slide-content stagger">
+      <div class="member-badge">
+        <div class="member-avatar" style="background:linear-gradient(135deg,var(--c1),var(--c2))">I1</div>
+        <div><div class="name">Daniel Montoya</div></div>
+      </div>
+      <h2 class="section-title">¿Qué es la<br><span style="color:var(--c3)">Regresión Logística?</span></h2>
+      <div class="two-col" style="margin-top:8px">
+        <div>
+          <p style="font-size:16px;color:var(--muted);line-height:1.7;margin-bottom:20px">A pesar del nombre, <strong style="color:var(--text)">NO es un algoritmo de regresión</strong>. Es un algoritmo de <strong style="color:var(--c4)">clasificación binaria</strong> que estima la probabilidad de que algo pertenezca a una de dos categorías.</p>
+          <div style="background:rgba(0,245,212,0.07);border:1px solid rgba(0,245,212,0.2);border-radius:12px;padding:16px 20px;margin-bottom:16px">
+            <p style="font-size:13px;color:var(--c4);font-weight:700;margin-bottom:4px">¿Por qué se llama "regresión"?</p>
+            <p style="font-size:13px;color:var(--muted)">Porque calcula una combinación lineal de las variables (como regresión), pero transforma el resultado con la función sigmoide para obtener una probabilidad entre 0 y 1.</p>
+          </div>
+          <p style="font-size:14px;color:var(--muted)">Salida: siempre entre 0 y 1 → interpretable como probabilidad</p>
+        </div>
+        <div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px;letter-spacing:1px;text-transform:uppercase;font-weight:700">Ejemplos de uso</p>
+          <div class="card" style="margin-bottom:10px;padding:14px 18px"><div style="display:flex;gap:10px;align-items:center"><span style="font-size:22px">📧</span><span style="font-size:14px">¿Es spam o no es spam?</span></div></div>
+          <div class="card" style="margin-bottom:10px;padding:14px 18px"><div style="display:flex;gap:10px;align-items:center"><span style="font-size:22px">💳</span><span style="font-size:14px">¿La transacción es fraudulenta?</span></div></div>
+          <div class="card" style="margin-bottom:10px;padding:14px 18px"><div style="display:flex;gap:10px;align-items:center"><span style="font-size:22px">🏥</span><span style="font-size:14px">¿El paciente tiene la enfermedad?</span></div></div>
+          <div class="card" style="padding:14px 18px"><div style="display:flex;gap:10px;align-items:center"><span style="font-size:22px">🎓</span><span style="font-size:14px">¿El estudiante aprobará?</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 4 — INTEGRANTE 2: Función Sigmoide
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide slide-dark" id="s3">
+    <div class="blob" style="width:400px;height:400px;background:var(--c2);bottom:-100px;right:-100px;"></div>
+    <div class="slide-content stagger">
+      <div class="member-badge">
+        <div class="member-avatar" style="background:linear-gradient(135deg,var(--c2),var(--c3))">I2</div>
+        <div><div class="name">Samuel López</div><div class="role">Fundamentos Matemáticos</div></div>
+      </div>
+      <h2 class="section-title">La Función<br><span style="color:var(--c5)">Sigmoide</span></h2>
+      <div class="two-col">
+        <div>
+          <div class="formula">
+            <div class="eq">σ(z) = 1 / (1 + e⁻ᶻ)</div>
+            <div class="label">Transforma cualquier número real → valor entre 0 y 1</div>
+          </div>
+          <div class="formula" style="margin-top:12px">
+            <div class="eq" style="font-size:18px">z = β₀ + β₁x₁ + β₂x₂ + ... + βₙxₙ</div>
+            <div class="label">Combinación lineal de las variables de entrada</div>
+          </div>
+          <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:rgba(255,255,255,0.04);border-radius:8px">
+              <span style="font-family:'Space Mono',monospace;font-size:13px;color:var(--c1)">z muy negativo</span>
+              <span style="font-size:13px;color:var(--muted)">→ σ(z) ≈ 0 (baja probabilidad)</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:rgba(255,255,255,0.04);border-radius:8px">
+              <span style="font-family:'Space Mono',monospace;font-size:13px;color:var(--c5)">z = 0</span>
+              <span style="font-size:13px;color:var(--muted)">→ σ(z) = 0.5 (incertidumbre)</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:rgba(255,255,255,0.04);border-radius:8px">
+              <span style="font-family:'Space Mono',monospace;font-size:13px;color:var(--c4)">z muy positivo</span>
+              <span style="font-size:13px;color:var(--muted)">→ σ(z) ≈ 1 (alta probabilidad)</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <svg width="100%" viewBox="0 0 360 240" style="background:rgba(0,0,0,0.3);border-radius:14px;border:1px solid rgba(255,255,255,0.07)">
+            <!-- Grid -->
+            <line x1="30" y1="20" x2="30" y2="220" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+            <line x1="30" y1="120" x2="340" y2="120" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+            <line x1="185" y1="20" x2="185" y2="220" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4,4" stroke-width="1"/>
+            <!-- Labels -->
+            <text x="18" y="124" fill="#666" font-size="10" text-anchor="middle" font-family="monospace">0.5</text>
+            <text x="18" y="30" fill="#666" font-size="10" text-anchor="middle" font-family="monospace">1</text>
+            <text x="18" y="215" fill="#666" font-size="10" text-anchor="middle" font-family="monospace">0</text>
+            <text x="185" y="235" fill="#666" font-size="10" text-anchor="middle" font-family="monospace">0</text>
+            <!-- Sigmoid curve -->
+            <path d="M 40,213 C 60,212 80,207 100,195 S 140,160 165,130 S 200,85 220,68 S 260,40 300,32 S 330,29 340,28"
+              fill="none" stroke="url(#sigGrad)" stroke-width="3" stroke-linecap="round"/>
+            <!-- Dot at z=0 -->
+            <circle cx="185" cy="120" r="5" fill="var(--c4)" opacity="0.9"/>
+            <!-- Gradient -->
+            <defs>
+              <linearGradient id="sigGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#FF3CAC"/>
+                <stop offset="50%" stop-color="#784BA0"/>
+                <stop offset="100%" stop-color="#00F5D4"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px">Curva en forma de S característica</p>
+          <div style="margin-top:16px;background:rgba(255,228,64,0.08);border:1px solid rgba(255,228,64,0.2);border-radius:10px;padding:14px 16px">
+            <p style="font-size:13px;color:var(--c5);font-weight:700;margin-bottom:4px">Umbral de decisión</p>
+            <p style="font-size:13px;color:var(--muted)">Por defecto: si σ(z) ≥ 0.5 → Clase 1 · si σ(z) &lt; 0.5 → Clase 0</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 5 — INTEGRANTE 2: Cómo aprende (Descenso del Gradiente)
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide slide-darker" id="s4">
+    <div class="blob" style="width:500px;height:500px;background:var(--c1);top:-200px;right:-200px;"></div>
+    <div class="slide-content stagger">
+      <div class="member-badge">
+        <div class="member-avatar" style="background:linear-gradient(135deg,var(--c2),var(--c3))">I2</div>
+        <div><div class="name">Samuel López</div></div>
+      </div>
+      <h2 class="section-title">¿Cómo <span style="color:var(--c1)">aprende</span><br>el modelo internamente?</h2>
+      <div class="card-grid cols3" style="margin-top:8px">
+        <div class="card accent-pink">
+          <div class="card-accent"></div>
+          <div style="font-family:'Space Mono',monospace;font-size:28px;font-weight:700;color:var(--c1);margin-bottom:8px">01</div>
+          <h3>Inicialización</h3>
+          <p>El modelo empieza con coeficientes β aleatorios o en cero.</p>
+        </div>
+        <div class="card accent-blue">
+          <div class="card-accent"></div>
+          <div style="font-family:'Space Mono',monospace;font-size:28px;font-weight:700;color:var(--c3);margin-bottom:8px">02</div>
+          <h3>Función de pérdida (Log Loss)</h3>
+          <p>Mide el error entre la predicción y la realidad.</p>
+          <div style="margin-top:10px;font-family:'Space Mono',monospace;font-size:11px;color:var(--c4)">L = -[y·log(ŷ) + (1-y)·log(1-ŷ)]</div>
+        </div>
+        <div class="card accent-teal">
+          <div class="card-accent"></div>
+          <div style="font-family:'Space Mono',monospace;font-size:28px;font-weight:700;color:var(--c4);margin-bottom:8px">03</div>
+          <h3>Descenso del Gradiente</h3>
+          <p>Ajusta los coeficientes iterativamente en la dirección que reduce el error.</p>
+        </div>
+      </div>
+      <div style="width:100%;max-width:1100px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:20px 24px;margin-top:16px;display:flex;align-items:center;gap:20px">
+        <div style="font-size:32px">🔄</div>
+        <div>
+          <p style="font-weight:700;margin-bottom:4px">El proceso se repite en cada iteración (época)</p>
+          <p style="font-size:13px;color:var(--muted)">El modelo sigue ajustando β hasta que el error converge (deja de disminuir significativamente). Cada iteración el modelo "ve" los datos de entrenamiento y actualiza su conocimiento.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 6 — INTEGRANTE 2: Métricas de Evaluación
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide slide-dark" id="s5">
+    <div class="blob" style="width:400px;height:400px;background:var(--c3);bottom:-150px;left:-100px;"></div>
+    <div class="slide-content stagger">
+      <div class="member-badge">
+        <div class="member-avatar" style="background:linear-gradient(135deg,var(--c2),var(--c3))">I2</div>
+        <div><div class="name">Samuel López</div><div class="role">Métricas de Evaluación</div></div>
+      </div>
+      <h2 class="section-title">Métricas de<br><span style="color:var(--c3)">Evaluación</span></h2>
+      <div class="metric-grid">
+        <div class="metric-card" style="border-color:rgba(0,245,212,0.3)">
+          <div class="val" style="color:var(--c4)">Acc</div>
+          <div class="metric-label">Accuracy</div>
+          <div class="metric-formula">(VP+VN)/(Total)</div>
+          <div class="metric-when">% total de predicciones correctas. Usar cuando las clases están balanceadas.</div>
+        </div>
+        <div class="metric-card" style="border-color:rgba(255,60,172,0.3)">
+          <div class="val" style="color:var(--c1)">Prec</div>
+          <div class="metric-label">Precisión</div>
+          <div class="metric-formula">VP / (VP + FP)</div>
+          <div class="metric-when">De los que predijo positivo, ¿cuántos lo eran? Minimizar falsos positivos.</div>
+        </div>
+        <div class="metric-card" style="border-color:rgba(43,134,197,0.3)">
+          <div class="val" style="color:var(--c3)">Rec</div>
+          <div class="metric-label">Recall</div>
+          <div class="metric-formula">VP / (VP + FN)</div>
+          <div class="metric-when">De los positivos reales, ¿cuántos detectó? Crítico en medicina.</div>
+        </div>
+        <div class="metric-card" style="border-color:rgba(254,228,64,0.3)">
+          <div class="val" style="color:var(--c5)">F1</div>
+          <div class="metric-label">F1-Score</div>
+          <div class="metric-formula">2·(P·R)/(P+R)</div>
+          <div class="metric-when">Balance entre Precisión y Recall. Ideal para clases desbalanceadas.</div>
+        </div>
+      </div>
+      <div style="margin-top:16px;width:100%;max-width:1100px;background:rgba(255,60,172,0.07);border:1px solid rgba(255,60,172,0.2);border-radius:12px;padding:14px 20px">
+        <span style="font-weight:700;color:var(--c1)">⚠️ Ejemplo real: </span>
+        <span style="font-size:14px;color:var(--muted)">Un modelo de detección de cáncer con Accuracy=90% pero Recall=60% está fallando — deja pasar el 40% de los enfermos sin detectar. El Recall importa más que el Accuracy en este contexto.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 7 — Matriz de Confusión + ROC
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide slide-darker" id="s6">
+    <div class="blob" style="width:450px;height:450px;background:var(--c4);top:-200px;right:-150px;opacity:0.12"></div>
+    <div class="slide-content stagger">
+      <div class="member-badge">
+        <div class="member-avatar" style="background:linear-gradient(135deg,var(--c2),var(--c3))">I2</div>
+        <div><div class="name">Samuel López</div></div>
+      </div>
+      <h2 class="section-title">Matriz de Confusión<br><span style="color:var(--c4)">& Curva ROC</span></h2>
+      <div class="two-col">
+        <div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:14px;letter-spacing:1px;text-transform:uppercase;font-weight:700">Matriz de Confusión</p>
+          <div class="conf-matrix">
+            <div class="cm-cell cm-header"></div>
+            <div class="cm-cell cm-header">Predicho: +</div>
+            <div class="cm-cell cm-header">Predicho: −</div>
+            <div class="cm-cell cm-header">Real: +</div>
+            <div class="cm-cell cm-tp">✓ VP<br><span style="font-size:11px;font-weight:400">Verdadero Positivo</span></div>
+            <div class="cm-cell cm-fn">✗ FN<br><span style="font-size:11px;font-weight:400">Falso Negativo</span></div>
+            <div class="cm-cell cm-header">Real: −</div>
+            <div class="cm-cell cm-fp">✗ FP<br><span style="font-size:11px;font-weight:400">Falso Positivo</span></div>
+            <div class="cm-cell cm-tn">✓ VN<br><span style="font-size:11px;font-weight:400">Verdadero Negativo</span></div>
+          </div>
+        </div>
+        <div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:14px;letter-spacing:1px;text-transform:uppercase;font-weight:700">Curva ROC — AUC</p>
+          <svg width="100%" viewBox="0 0 280 200" style="background:rgba(0,0,0,0.3);border-radius:12px;border:1px solid rgba(255,255,255,0.07)">
+            <line x1="30" y1="170" x2="260" y2="170" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+            <line x1="30" y1="20" x2="30" y2="170" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+            <!-- Diagonal azar -->
+            <line x1="30" y1="170" x2="260" y2="20" stroke="rgba(255,255,255,0.2)" stroke-dasharray="5,4" stroke-width="1.5"/>
+            <!-- Good ROC curve -->
+            <path d="M 30,170 C 30,170 50,60 80,40 S 150,25 260,20" fill="none" stroke="url(#rocGrad)" stroke-width="3"/>
+            <path d="M 30,170 C 30,170 50,60 80,40 S 150,25 260,20 L 260,170 Z" fill="url(#rocFill)" opacity="0.15"/>
+            <text x="155" y="100" fill="var(--c4)" font-size="13" font-weight="bold" font-family="monospace">AUC ≈ 0.90</text>
+            <text x="155" y="115" fill="#666" font-size="10" font-family="monospace">Modelo excelente</text>
+            <text x="20" y="18" fill="#666" font-size="9" font-family="monospace">TPR</text>
+            <text x="245" y="183" fill="#666" font-size="9" font-family="monospace">FPR</text>
+            <defs>
+              <linearGradient id="rocGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="var(--c1)"/>
+                <stop offset="100%" stop-color="var(--c4)"/>
+              </linearGradient>
+              <linearGradient id="rocFill" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="var(--c4)"/>
+                <stop offset="100%" stop-color="transparent"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;font-size:12px">
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--c4)">AUC = 1.0</span><span style="color:var(--muted)">Modelo perfecto</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#89B4FA">AUC = 0.9+</span><span style="color:var(--muted)">Excelente</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--c5)">AUC = 0.7+</span><span style="color:var(--muted)">Bueno</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--c1)">AUC = 0.5</span><span style="color:var(--muted)">No mejor que el azar</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 8 — INTEGRANTE 3: Caso de Uso
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide slide-dark" id="s7">
+    <div class="blob" style="width:500px;height:500px;background:var(--c3);bottom:-200px;right:-150px;opacity:0.15"></div>
+    <div class="slide-content stagger">
+      <div class="member-badge">
+        <div class="member-avatar" style="background:linear-gradient(135deg,var(--c3),var(--c4))">I3</div>
+        <div><div class="name">Wendy Infante</div><div class="role">Código y Caso de Uso</div></div>
+      </div>
+      <h2 class="section-title">Caso de Uso Real<br><span style="color:var(--c4)">Enfermedad Cardíaca</span></h2>
+      <div class="two-col">
+        <div>
+          <p style="font-size:15px;line-height:1.7;color:var(--muted);margin-bottom:16px">Dataset: <strong style="color:var(--text)">Heart Disease UCI</strong> — uno de los más usados en ML para clasificación binaria en salud. Contiene 303 pacientes con 13 variables clínicas.</p>
+          <div style="background:rgba(0,245,212,0.07);border:1px solid rgba(0,245,212,0.2);border-radius:12px;padding:16px 20px;margin-bottom:16px">
+            <p style="font-size:13px;font-weight:700;color:var(--c4);margin-bottom:8px">¿Por qué es ideal para Reg. Logística?</p>
+            <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)">
+              <span>✓ Salida binaria: 0 = sano · 1 = enfermedad</span>
+              <span>✓ Relaciones aproximadamente lineales</span>
+              <span>✓ Modelo interpretable para médicos</span>
+              <span>✓ Dataset real y validado científicamente</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <table class="styled-table">
+            <thead><tr><th>Variable</th><th>Descripción</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">age</td><td>Edad del paciente</td></tr>
+              <tr><td class="mono">sex</td><td>Sexo (0=Mujer, 1=Hombre)</td></tr>
+              <tr><td class="mono">cp</td><td>Tipo de dolor en el pecho (0-3)</td></tr>
+              <tr><td class="mono">trestbps</td><td>Presión arterial en reposo</td></tr>
+              <tr><td class="mono">chol</td><td>Colesterol sérico (mg/dl)</td></tr>
+              <tr><td class="mono">thalach</td><td>Frecuencia cardíaca máxima</td></tr>
+              <tr><td class="mono" style="color:var(--c1)">target</td><td><strong style="color:var(--c1)">0=Sano · 1=Enfermedad ← objetivo</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 9 — INTEGRANTE 3: Código Python
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide slide-darker" id="s8">
+    <div class="slide-content stagger" style="width:100%;max-width:1100px">
+      <div class="member-badge">
+        <div class="member-avatar" style="background:linear-gradient(135deg,var(--c3),var(--c4))">I3</div>
+        <div><div class="name">Wendy Infante</div><div class="role">Implementación</div></div>
+      </div>
+      <h2 class="section-title" style="font-size:clamp(24px,3.5vw,42px)">Código Python —<br><span style="color:var(--c5)">Paso a Paso</span></h2>
+      <div class="code-block" style="max-height:340px;overflow-y:auto">
+        <div class="code-header">
+          <div class="code-dot r"></div><div class="code-dot y"></div><div class="code-dot g"></div>
+          <span class="file-name">modelo_cardiaco.py</span>
+        </div>
+        <div>
+<span class="cm"># PASO 1: Importar librerías</span><br>
+<span class="kw">import</span> pandas <span class="kw">as</span> pd<br>
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt<br>
+<span class="kw">import</span> seaborn <span class="kw">as</span> sns<br>
+<span class="kw">from</span> sklearn.model_selection <span class="kw">import</span> <span class="fn">train_test_split</span><br>
+<span class="kw">from</span> sklearn.linear_model <span class="kw">import</span> <span class="cl">LogisticRegression</span><br>
+<span class="kw">from</span> sklearn.preprocessing <span class="kw">import</span> <span class="cl">StandardScaler</span><br>
+<span class="kw">from</span> sklearn.metrics <span class="kw">import</span> accuracy_score, classification_report, confusion_matrix, roc_auc_score<br><br>
+<span class="cm"># PASO 2: Cargar dataset real</span><br>
+url = <span class="st">'https://raw.githubusercontent.com/datasciencedojo/datasets/master/heart.csv'</span><br>
+df = pd.<span class="fn">read_csv</span>(url)<br>
+<span class="fn">print</span>(<span class="st">"Valores nulos:"</span>, df.<span class="fn">isnull</span>().<span class="fn">sum</span>().<span class="fn">sum</span>()) <span class="cm"># Verificar limpieza</span><br><br>
+<span class="cm"># PASO 3: Preparar datos</span><br>
+X = df.<span class="fn">drop</span>(<span class="st">'target'</span>, axis=<span class="nu">1</span>)   <span class="cm"># Variables de entrada</span><br>
+y = df[<span class="st">'target'</span>]                  <span class="cm"># Variable objetivo (0 o 1)</span><br>
+X_train, X_test, y_train, y_test = <span class="fn">train_test_split</span>(X, y, test_size=<span class="nu">0.2</span>, random_state=<span class="nu">42</span>)<br>
+scaler = <span class="cl">StandardScaler</span>()       <span class="cm"># Normalizar variables</span><br>
+X_train = scaler.<span class="fn">fit_transform</span>(X_train)<br>
+X_test  = scaler.<span class="fn">transform</span>(X_test)<br><br>
+<span class="cm"># PASO 4: Entrenar modelo</span><br>
+modelo = <span class="cl">LogisticRegression</span>(random_state=<span class="nu">42</span>, max_iter=<span class="nu">200</span>)<br>
+modelo.<span class="fn">fit</span>(X_train, y_train)   <span class="cm"># El modelo aprende los coeficientes β</span><br><br>
+<span class="cm"># PASO 5: Predecir y evaluar</span><br>
+y_pred = modelo.<span class="fn">predict</span>(X_test)<br>
+y_prob = modelo.<span class="fn">predict_proba</span>(X_test)[:, <span class="nu">1</span>]<br>
+<span class="fn">print</span>(<span class="fn">classification_report</span>(y_test, y_pred))<br>
+<span class="fn">print</span>(<span class="st">"AUC:"</span>, <span class="fn">roc_auc_score</span>(y_test, y_prob))<br><br>
+<span class="cm"># PASO 6: Visualizar Matriz de Confusión</span><br>
+sns.<span class="fn">heatmap</span>(<span class="fn">confusion_matrix</span>(y_test, y_pred), annot=<span class="kw">True</span>, fmt=<span class="st">'d'</span>, cmap=<span class="st">'Blues'</span>)<br>
+plt.<span class="fn">title</span>(<span class="st">'Matriz de Confusión'</span>); plt.<span class="fn">show</span>()
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 10 — Ventajas y Desventajas
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide slide-dark" id="s9">
+    <div class="blob" style="width:400px;height:400px;background:var(--c2);top:-150px;left:-100px;"></div>
+    <div class="slide-content stagger">
+      <span class="tag pink">Análisis del Modelo</span>
+      <h2 class="section-title">Ventajas &<br><span style="color:var(--c1)">Desventajas</span></h2>
+      <div class="pc-grid">
+        <div>
+          <p style="font-size:12px;color:var(--c4);font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px">✓ Ventajas</p>
+          <ul class="pc-list pros">
+            <li>🔍 <span>Fácil de interpretar: los coeficientes β indican el impacto de cada variable</span></li>
+            <li>⚡ <span>Rápido de entrenar, incluso con grandes datasets</span></li>
+            <li>📊 <span>Salida probabilística: no solo clase, sino nivel de confianza</span></li>
+            <li>🎯 <span>Excelente para clasificación binaria bien definida</span></li>
+            <li>📐 <span>Sirve como baseline para comparar con modelos más complejos</span></li>
+          </ul>
+        </div>
+        <div>
+          <p style="font-size:12px;color:var(--c1);font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px">✗ Desventajas</p>
+          <ul class="pc-list cons">
+            <li>📉 <span>No captura relaciones no lineales complejas entre variables</span></li>
+            <li>⚠️ <span>Sensible a outliers y datos sin normalizar</span></li>
+            <li>🔗 <span>Asume cierta independencia entre las variables de entrada</span></li>
+            <li>🧹 <span>Requiere limpieza previa de datos (no funciona bien con datos sucios)</span></li>
+            <li>🎯 <span>No es adecuada directamente para clasificación multi-clase</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SLIDE 11 — CONCLUSIÓN
+  ══════════════════════════════════════════════════════════ -->
+  <div class="slide slide-cover" id="s10">
+    <div class="hero-gradient"></div>
+    <div class="blob pulse-glow" style="width:550px;height:550px;background:var(--c3);bottom:-200px;left:-150px;"></div>
+    <div class="blob pulse-glow" style="width:400px;height:400px;background:var(--c1);top:-100px;right:-100px;animation-delay:2s"></div>
+    <div class="slide-content centered stagger" style="max-width:900px">
+      <span class="tag teal">Conclusión</span>
+      <h2 class="section-title" style="font-size:clamp(36px,5vw,64px);text-align:center">La Regresión Logística es<br><span class="grad-text">fundamental en ML</span></h2>
+      <p style="font-size:16px;color:var(--muted);max-width:700px;text-align:center;line-height:1.8;margin:16px 0 32px">No es solo un ejercicio académico. Se usa en hospitales, bancos y empresas tecnológicas todos los días para tomar decisiones críticas basadas en datos.</p>
+      <div class="card-grid cols3" style="max-width:1000px">
+        <div class="card accent-pink" style="text-align:center"><div class="card-accent"></div><div style="font-size:28px;margin-bottom:8px">🏥</div><h3>Medicina</h3><p>Diagnóstico de enfermedades, riesgo de mortalidad</p></div>
+        <div class="card accent-blue" style="text-align:center"><div class="card-accent"></div><div style="font-size:28px;margin-bottom:8px">💳</div><h3>Finanzas</h3><p>Scoring crediticio, detección de fraude</p></div>
+        <div class="card accent-teal" style="text-align:center"><div class="card-accent"></div><div style="font-size:28px;margin-bottom:8px">📧</div><h3>Tecnología</h3><p>Filtros de spam, moderación de contenido</p></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /.deck -->
+
+<!-- ── NAV ── -->
+<div class="nav">
+  <button id="btn-prev" onclick="navigate(-1)">←</button>
+  <div class="dots" id="dots"></div>
+  <button id="btn-next" onclick="navigate(1)">→</button>
+  <span id="slide-counter">1 / 11</span>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const dotsEl = document.getElementById('dots');
+  const counter = document.getElementById('slide-counter');
+  const progress = document.getElementById('progress');
+  let current = 0;
+
+  // Build dots
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.onclick = () => goTo(i);
+    dotsEl.appendChild(d);
+  });
+
+  function goTo(n) {
+    if (n < 0 || n >= slides.length) return;
+    slides[current].classList.remove('active');
+    slides[current].classList.add('exit');
+    setTimeout(() => slides[current].classList.remove('exit'), 500);
+    current = n;
+    slides[current].classList.add('active');
+    // Update dots
+    document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === current));
+    // Counter
+    counter.textContent = (current + 1) + ' / ' + slides.length;
+    // Progress
+    progress.style.width = ((current + 1) / slides.length * 100) + '%';
+  }
+
+  function navigate(dir) { goTo(current + dir); }
+
+  // Keyboard
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') navigate(1);
+    if (e.key === 'ArrowLeft') navigate(-1);
+  });
+
+  // Init progress
+  progress.style.width = (1 / slides.length * 100) + '%';
+</script>
+</body>
+</html>
